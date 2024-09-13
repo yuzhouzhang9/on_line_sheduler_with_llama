@@ -17,11 +17,12 @@ from fairscale.nn.model_parallel.initialize import (
     initialize_model_parallel,
     model_parallel_is_initialized,
 )
-from seq_manager import SeqEngine,Request
-from llama.model import ModelArgs, Transformer
-from llama.tokenizer import Tokenizer
+from .mode_config import ModelArgs
+from .model import Transformer
+from .tokenizer import Tokenizer
+from seq_manager.request import Request
 from logger import *
-
+from seq_manager.seq_engine import SeqEngine
 Role = Literal["system", "user", "assistant"]
 
 
@@ -111,13 +112,19 @@ class Llama:
     @torch.inference_mode()
     def only_prefill(
         self,
-        requests:list[Request],
+        # 传入的是seq_id
+        requests:list[int],
         temperature:float=0.2,
         top_p:float=0.8,
     ) -> list[int]:
         
         # 批次和长度，
-        mx_length = max([len(request.seq_tokens) for request in requests])
+        if True:
+            # todo
+            mx_length = 0
+            for seq_id in requests:
+                pos = SeqEngine.seq_id_to_list[seq_id]
+                mx_length = max(mx_length, len(SeqEngine.seq_list[pos].seq_tokens))
         batch_size = len(requests)
 
         # 预分配一个这么大的空间
@@ -125,7 +132,8 @@ class Llama:
 
         # 赋值
         for k, t in enumerate(requests):
-            tokens[k] = torch.tensor(t.seq_tokens, dtype=torch.long, device="cuda")
+            pos =  SeqEngine.seq_id_to_list[seq_id]
+            tokens[k] = torch.tensor(SeqEngine.seq_list[pos].seq_tokens, dtype=torch.long, device="cuda")
         
         # ipdb.set_trace()
         begin_prefill_time = time.time()

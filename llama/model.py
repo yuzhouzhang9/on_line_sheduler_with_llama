@@ -4,7 +4,6 @@
 import math
 from dataclasses import dataclass
 from typing import Optional, Tuple
-
 import fairscale.nn.model_parallel.initialize as fs_init
 import torch
 import torch.nn.functional as F
@@ -14,24 +13,9 @@ from fairscale.nn.model_parallel.layers import (
     RowParallelLinear,
 )
 from torch import nn
-from seq_manager import *
-from .kv_cache_manger import KVCacheManager
+from cache_manager import KVCacheManager
+from .mode_config import ModelArgs
 import ipdb
-@dataclass
-class ModelArgs:
-    dim: int = 4096
-    n_layers: int = 32
-    n_heads: int = 32
-    n_kv_heads: Optional[int] = None
-    vocab_size: int = -1  # defined later by tokenizer
-    multiple_of: int = 256  # make SwiGLU hidden layer size multiple of large power of 2
-    ffn_dim_multiplier: Optional[float] = None
-    norm_eps: float = 1e-5
-
-    max_batch_size: int = 32
-    max_seq_len: int = 2048
-
-
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
@@ -134,7 +118,7 @@ class Attention(nn.Module):
         start_pos: int,
         freqs_cis: torch.Tensor,
         mask: Optional[torch.Tensor],
-        seq:list[Request],
+        seq:list[int],
         layer_id:int,
     ):
         # 
@@ -167,12 +151,14 @@ class Attention(nn.Module):
 
         # ipdb.set_trace()
         # 通过这个方式重新KV Cache
-        if seq[0].seq_begin_pos > 0:
+        if KVCacheManager.check(seq):
             keys,values = KVCacheManager.get_cache(bsz,seq,layer_id)
             keys = torch.cat([keys,xk],dim=1)
             
         else:
             keys,values = xk,xv
+        
+        
         # 不适用分组KVCache
         # repeat k/v heads if n_kv_heads < n_heads
         # keys = repeat_kv(keys, self.n_rep)  # (bs, cache_len + seqlen, n_local_heads, head_dim)
@@ -245,7 +231,7 @@ class TransformerBlock(nn.Module):
         start_pos: int,
         freqs_cis: torch.Tensor,
         mask: Optional[torch.Tensor],
-        seq:list[Request],
+        seq:list[int],
         layers_id:int,
     ):
         
@@ -288,7 +274,7 @@ class Transformer(nn.Module):
     # 改一下，不需要start_pos
     # 需要的是seq，
     @torch.inference_mode()
-    def forward(self, tokens: torch.Tensor,seq:list[Request]):
+    def forward(self, tokens: torch.Tensor,seq:list[int]):
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
         self.freqs_cis = self.freqs_cis.to(h.device)

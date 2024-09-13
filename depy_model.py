@@ -9,6 +9,7 @@ import time
 from logger import *
 from seq_manager import *
 from llama import *
+from cache_manager import KVCacheManager
 import torch
 def main(
     ckpt_dir: str = "llama-2-7b-chat/",
@@ -79,7 +80,7 @@ def main(
     
     while not SeqEngine.empty():
 
-        # 得到下一个需要推理的序列
+        # 得到下一个需要推理的序列，只需要传递seq_id即可
         tokens = SeqEngine.step()
         Logger.log(f"prompts tokens {tokens}")
         next_token = generator.only_prefill(tokens)
@@ -88,15 +89,22 @@ def main(
         Logger.log(f"prompts：{tokens},next_token：{next_token}")
         if isinstance(next_token, torch.Tensor):
             next_token = next_token.tolist()
-        new_tokens = []
-
-        for i, token in enumerate(tokens):
-            new_tokens.append(token.seq_tokens + next_token[i])  # 如果没有对应的新 token，保持原样
-        Logger.log(f"new tokens：{new_tokens}")
-        for token in new_tokens:
-            res = generator.tokenizer.decode(token)
+        
+        for i, seq_id in enumerate(tokens):
+            pos = SeqEngine.seq_id_to_list[seq_id]
+            Logger.log(f"SeqEngine:{SeqEngine}")
+            Logger.log(f"old Request{SeqEngine.seq_list[pos]}")
+            SeqEngine.seq_list[pos].seq_tokens.extend(next_token[i])  # 追加新 tokenx
+            SeqEngine.update_begin_pos(seq_id)
+            Logger.log(f"new Request{SeqEngine.seq_list[pos]}")
+            res = generator.tokenizer.decode(SeqEngine.seq_list[pos].seq_tokens)
             Logger.log(f"生成的文本：{res}")
-            SeqEngine.add_request(res)
+            # new_tokens.append(token.seq_tokens + next_token[i])  # 如果没有对应的新 token，保持原样
+        # Logger.log(f"new tokens：{new_tokens}")
+        # for token in new_tokens:
+            # res = generator.tokenizer.decode(token)
+            # Logger.log(f"生成的文本：{res}")
+            # SeqEngine.add_request(res)
         # pass
         # return
     

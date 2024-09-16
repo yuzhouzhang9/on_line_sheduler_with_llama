@@ -7,3 +7,6 @@ pip install -e .
 torchrun depy_model.py
 ```
 
+## to do in future
+implement iterative-level support different batch sizes
+implement distrubuted deployment

@@ -8,7 +8,7 @@ class KVCacheManager:
     cache_v = None
     cnt = 0
 
-    # 
+    #
     @classmethod
     def initialize_cache(cls, max_batch_size, max_seq_len, layers, n_local_kv_heads, head_dim):
         
@@ -32,7 +32,7 @@ class KVCacheManager:
         head_dim = 128
         key = torch.zeros(
             (
-                batch_size, mx_seq_length, head_number, head_dim
+                batch_size, mx_seq_length,head_number, head_dim
             )
         ).cuda()
         value = torch.zeros(
@@ -42,12 +42,14 @@ class KVCacheManager:
         ).cuda()
         for bz,seq_id in enumerate(seqs):
             pos = SeqEngine.seq_id_to_list[seq_id]
+            # Logger.log(f"bz:b{bz},seq_id:{seq_id}")
             for i in range(SeqEngine.seq_list[pos].seq_begin_pos):
                 # for j in range(32):
                 j = layer
                 idx = SeqEngine.seq_list[pos].seq_tokenpos_layer_id_to_kv_cache_id[i][j]
-                key[bz,i,j] = cls.cache_k[0,idx,j]
-                value[bz,i,j] = cls.cache_v[0,idx,j]
+                key[bz,i] = cls.cache_k[0,idx,j]
+                value[bz,i] = cls.cache_v[0,idx,j]
+            # Logger.log(f"key:{key},value:{value}")
         return (key, value)
 
     @classmethod
@@ -66,11 +68,11 @@ class KVCacheManager:
             pos = SeqEngine.seq_id_to_list[seq_id]
             for i in range(SeqEngine.seq_list[pos].seq_begin_pos,len(SeqEngine.seq_list[pos].seq_tokens)):
                 idx = cls._get_idx()
-                cls.cache_k[0,idx,layer] = key[0,i,layer]
-                cls.cache_v[0,idx,layer] = value[0,i,layer]
+                cls.cache_k[0,idx,layer] = key[0,i - SeqEngine.seq_list[pos].seq_begin_pos ,layer]
+                cls.cache_v[0,idx,layer] = value[0,i - SeqEngine.seq_list[pos].seq_begin_pos,layer]
                 SeqEngine.update(seq_id,i,layer,idx)
             
-        return 
+        return   
     @classmethod
     def update_seq_begin_pos(cls,seqs:list[int]):
         for seq_id in seqs:

@@ -14,10 +14,10 @@ class Request:
     seq_finished_length:int
     seq_tokens:list[int]
     seq_begin_pos:int
-    seq_generate_length:int
+    seq_max_generate_length:int
     seq_tokenpos_layer_id_to_kv_cache_id:dict
     seq_res:str
-    
+    seq_has_generate_tokens:int
     # 构造
     def __init__(self,sq:list[int],seq_id:int,res:str):
         self.seq_begin_pos = 0
@@ -26,10 +26,11 @@ class Request:
         self.seq_state = 0
         self.seq_finished_length = 0
         self.seq_tokens = sq
-        self.seq_generate_length = 1024  # 新添加的初始化
+        self.seq_max_generate_length = 64  # 新添加的初始化
+        self.seq_has_generate_tokens = 0
         # 序列内容
         self.seq_res = res
         # 映射层到不同层到kvcache的映射
-        self.seq_tokenpos_layer_id_to_kv_cache_id = [[0]*32 for i in range(self.seq_length)]
+        self.seq_tokenpos_layer_id_to_kv_cache_id = [[0]*32 for _ in range(self.seq_length)]
     # def _get_id():
     #     return 1

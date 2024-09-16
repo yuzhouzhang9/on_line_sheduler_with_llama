@@ -154,7 +154,7 @@ class Attention(nn.Module):
         if KVCacheManager.check(seq):
             keys,values = KVCacheManager.get_cache(bsz,seq,layer_id)
             keys = torch.cat([keys,xk],dim=1)
-            
+            values = torch.cat([values,xv],dim=1)
         else:
             keys,values = xk,xv
         

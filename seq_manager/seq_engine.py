@@ -4,6 +4,7 @@ from llama.tokenizer import Tokenizer
 import threading
 import time
 from typing import List, Dict
+from logger import Logger
 # 创建一个线程锁对象
 lock = threading.Lock()
 
@@ -63,10 +64,19 @@ class SeqEngine:
             # 这里可以实现批次调度，随机一个请求
             import random
             # todo 目前实现随机传输一个idx
-            if True:
+            if True :
                 # todo
                 pass
                 idx = random.randint(1,cls.cnt)
+            if True:
+                # todo 实现一个调度选择prefill批次，目前简单选择一个需要做prefill的
+                # 默认状态0为prefill，
+                # 状态1为decode
+                # 实现一个迭代级的调度
+                for i,request in enumerate(cls.seq_list):
+                    if request.seq_state == 0:
+                        idx = request.seq_id
+                        break
             temp = [idx]
             # cls.seq_list = cls.seq_list[1:]  # 移除第一个请求
             return temp
@@ -92,17 +102,43 @@ class SeqEngine:
         cls.seq_list[idx].seq_tokenpos_layer_id_to_kv_cache_id[i][layers_id] = kv_pos
             # pass
         # cls.seq_list[idx].seq_begin_pos 
-    
     @classmethod
     @synchronized
+    def complete_prefill_stage(cls,seq_id):
+        # 更新阶段状态
+        idx = cls.seq_id_to_list[seq_id]
+        # 更新为decode,1默认为decode stage
+        cls.seq_list[idx].seq_state = 1
+        
+    
+    @classmethod
     def update_begin_pos(cls,seq_id):
         idx = cls.seq_id_to_list[seq_id]
         cls.seq_list[idx].seq_length += 1
-        cls.seq_list[idx].seq_begin_pos = len(cls.seq_list[idx].seq_tokens)
+        cls.seq_list[idx].seq_begin_pos = len(cls.seq_list[idx].seq_tokens) - 1
         cls.seq_list[idx].seq_tokenpos_layer_id_to_kv_cache_id.extend([[0]*32])
+        cls.seq_list[idx].seq_has_generate_tokens += 1
+        if  cls.seq_list[idx].seq_has_generate_tokens >= cls.seq_list[idx].seq_max_generate_length :
+            Logger.log(f"request id:{cls.seq_list[idx].seq_id} had completed")
+            # import ipdb
+            # ipdb.set_trace()
+            cls._complete_decode_stage(idx)
+   
+    @classmethod
+    def _complete_decode_stage(cls,idx):
+        # decode stage over
+        cls.seq_list[idx].seq_state = 2 
+        
+   
     # 如果为空返回true
     @classmethod
     def empty(cls):
-        if len(cls.seq_list) == 0:
-            return True
-        return False
+        # if len(cls.seq_list) == 0:
+        #     return True
+        # 需要更好的数据结构实现这个方法
+        # Logger.log("test")
+        for request in cls.seq_list:
+            # Logger.log(f"request:{request}")
+            if request.seq_state != 2:
+                return False
+        return True
